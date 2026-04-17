@@ -9,34 +9,36 @@
 //
 // ONVIF supports two event delivery mechanisms:
 //
-//   1. PullPoint (used here): The client creates a subscription, then
-//      periodically "pulls" events from the camera. This is simpler
-//      because it works through NAT/firewalls — the client initiates
-//      all connections. Most VMS software uses this approach.
+//  1. PullPoint (used here): The client creates a subscription, then
+//     periodically "pulls" events from the camera. This is simpler
+//     because it works through NAT/firewalls — the client initiates
+//     all connections. Most VMS software uses this approach.
 //
-//   2. WS-BaseNotification (push): The camera pushes events to a
-//      client-hosted HTTP endpoint. Requires the client to run an HTTP
-//      server that the camera can reach — problematic with NAT/firewalls.
+//  2. WS-BaseNotification (push): The camera pushes events to a
+//     client-hosted HTTP endpoint. Requires the client to run an HTTP
+//     server that the camera can reach — problematic with NAT/firewalls.
 //
 // PullPoint workflow:
-//   1. CreatePullPointSubscription — camera creates a subscription and
-//      returns a subscription endpoint URL.
-//   2. PullMessages (loop) — client polls the subscription endpoint.
-//      The camera blocks the response until events occur or timeout.
-//      This is similar to HTTP long polling.
-//   3. Unsubscribe — clean up when done (important to free camera resources).
+//  1. CreatePullPointSubscription — camera creates a subscription and
+//     returns a subscription endpoint URL.
+//  2. PullMessages (loop) — client polls the subscription endpoint.
+//     The camera blocks the response until events occur or timeout.
+//     This is similar to HTTP long polling.
+//  3. Unsubscribe — clean up when done (important to free camera resources).
 //
 // Run: go run ./06-events/
 package main
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -57,6 +59,21 @@ type soapEnvelope struct {
 type soapBodyMsg struct {
 	CreateResponse createPullPointResponse `xml:"CreatePullPointSubscriptionResponse"`
 	PullResponse   pullMessagesResponse    `xml:"PullMessagesResponse"`
+	Fault          soapFault               `xml:"Fault"`
+}
+
+type soapFault struct {
+	Code   soapFaultCode   `xml:"Code"`
+	Reason soapFaultReason `xml:"Reason"`
+}
+
+type soapFaultCode struct {
+	Value   string `xml:"Value"`
+	Subcode string `xml:"Subcode>Value"`
+}
+
+type soapFaultReason struct {
+	Text string `xml:"Text"`
 }
 
 type createPullPointResponse struct {
@@ -91,7 +108,7 @@ type msgPayload struct {
 type innerMessage struct {
 	UtcTime string      `xml:"UtcTime,attr"`
 	Source  simpleItems `xml:"Source"`
-	Data   simpleItems `xml:"Data"`
+	Data    simpleItems `xml:"Data"`
 }
 
 type simpleItems struct {
@@ -101,6 +118,90 @@ type simpleItems struct {
 type simpleItem struct {
 	Name  string `xml:"Name,attr"`
 	Value string `xml:"Value,attr"`
+}
+
+// topicNode is one node in the topic tree returned by GetEventProperties.
+type topicNode struct {
+	Name     string
+	Children []*topicNode
+}
+
+// schemaNodes are element names that describe message structure, not topics.
+// We skip them when printing the topic tree.
+var schemaNodes = map[string]bool{
+	"MessageDescription": true,
+	"Source":             true,
+	"Data":               true,
+	"SimpleItemDescription": true,
+	"ElementItemDescription": true,
+}
+
+// parseTopicChildren reads child elements from decoder until the matching
+// EndElement and builds a slice of topicNodes.
+func parseTopicChildren(decoder *xml.Decoder) ([]*topicNode, error) {
+	var nodes []*topicNode
+	for {
+		tok, err := decoder.Token()
+		if err != nil {
+			return nodes, err
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			children, err := parseTopicChildren(decoder)
+			node := &topicNode{Name: t.Name.Local, Children: children}
+			nodes = append(nodes, node)
+			if err != nil {
+				return nodes, err
+			}
+		case xml.EndElement:
+			return nodes, nil
+		}
+	}
+}
+
+// printTopicTree prints the topic tree with indentation, skipping schema nodes.
+func printTopicTree(nodes []*topicNode, indent int) {
+	for _, n := range nodes {
+		if schemaNodes[n.Name] {
+			continue
+		}
+		fmt.Printf("%s%s\n", strings.Repeat("  ", indent), n.Name)
+		printTopicTree(n.Children, indent+1)
+	}
+}
+
+// printSupportedTopics calls GetEventProperties and prints the topic tree.
+func printSupportedTopics(dev interface {
+	CallMethod(interface{}) (*http.Response, error)
+}) error {
+	resp, err := dev.CallMethod(event.GetEventProperties{})
+	if err != nil {
+		return fmt.Errorf("GetEventProperties: %w", err)
+	}
+	defer resp.Body.Close()
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(raw))
+	}
+
+	decoder := xml.NewDecoder(bytes.NewReader(raw))
+	for {
+		tok, err := decoder.Token()
+		if err != nil {
+			break
+		}
+		if se, ok := tok.(xml.StartElement); ok && se.Name.Local == "TopicSet" {
+			nodes, _ := parseTopicChildren(decoder)
+			printTopicTree(nodes, 0)
+			return nil
+		}
+	}
+	fmt.Println("  (no TopicSet found in response)")
+	return nil
 }
 
 func main() {
@@ -121,6 +222,13 @@ func main() {
 	fmt.Println("=== ONVIF Event Service (PullPoint) ===")
 	fmt.Println()
 
+	// ─── 0. GetEventProperties — supported topics ────────────────────────
+	fmt.Println("--- Supported Event Topics ---")
+	if err := printSupportedTopics(dev); err != nil {
+		fmt.Printf("  (could not retrieve topics: %v)\n", err)
+	}
+	fmt.Println()
+
 	// ─── 1. CreatePullPointSubscription ─────────────────────────────────
 	// This tells the camera to start buffering events for us.
 	// The camera returns a subscription reference URL that we'll use
@@ -129,37 +237,56 @@ func main() {
 	// InitialTerminationTime sets how long the subscription lives.
 	// If we don't renew it (via Renew), it auto-expires to free
 	// camera resources. PT60S = 60 seconds in ISO 8601 duration format.
+	//
+	// NOTE: The use-go/onvif library's CreatePullPointSubscription struct has
+	// a typo in the SubscriptionPolicy XML tag ("wsnt:sSubscriptionPolicy"
+	// instead of "wsnt:SubscriptionPolicy"), which causes cameras to reject
+	// the request with a SOAP Sender fault.
+	// See: https://github.com/use-go/onvif/issues/63
+	//
+	// Once that issue is fixed, this can be simplified to:
+	//
+	//   createReq := event.CreatePullPointSubscription{}
+	//   resp, err := dev.CallMethod(createReq)
+	//
+	// Until then, we send the SOAP request manually.
 	fmt.Println("Creating PullPoint subscription...")
 
-	createReq := event.CreatePullPointSubscription{
-		// We leave Filter empty to receive ALL events.
-		// In production, you would filter by topic to reduce noise:
-		//   Filter: event.FilterType{
-		//       TopicExpression: event.TopicExpressionType{
-		//           Dialect: "http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet",
-		//           TopicKinds: "tns1:VideoAnalytics//.  ",
-		//       },
-		//   },
+	eventEndpoint := dev.GetEndpoint("events")
+	if eventEndpoint == "" {
+		log.Fatal("Event service endpoint not found on this device")
 	}
 
-	resp, err := dev.CallMethod(createReq)
+	const createPullPointSOAP = `<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:tev="http://www.onvif.org/ver10/events/wsdl"
+            xmlns:wsnt="http://docs.oasis-open.org/wsn/b-2">
+  <s:Body>
+    <tev:CreatePullPointSubscription>
+      <wsnt:InitialTerminationTime>PT60S</wsnt:InitialTerminationTime>
+    </tev:CreatePullPointSubscription>
+  </s:Body>
+</s:Envelope>`
+
+	httpResp, err := http.Post(eventEndpoint, "application/soap+xml; charset=utf-8", strings.NewReader(createPullPointSOAP))
 	if err != nil {
 		log.Fatalf("CreatePullPointSubscription failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer httpResp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		log.Fatalf("Failed to read response: %v", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		log.Fatalf("CreatePullPointSubscription returned HTTP %d:\n%s", resp.StatusCode, string(body))
 	}
 
 	var createEnv soapEnvelope
 	if err := xml.Unmarshal(body, &createEnv); err != nil {
 		log.Fatalf("Failed to parse CreatePullPointSubscription response: %v", err)
+	}
+
+	if f := createEnv.Body.Fault; f.Code.Value != "" {
+		log.Fatalf("CreatePullPointSubscription SOAP Fault:\n  Code    : %s\n  Subcode : %s\n  Reason  : %s\n  Raw XML :\n%s",
+			f.Code.Value, f.Code.Subcode, f.Reason.Text, string(body))
 	}
 
 	subAddr := createEnv.Body.CreateResponse.SubscriptionReference.Address
@@ -180,7 +307,6 @@ func main() {
 	fmt.Println("Trigger motion in front of the camera to see events.")
 	fmt.Println()
 
-	// Set up graceful shutdown with Ctrl+C
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -203,9 +329,8 @@ func main() {
 
 		pollCount++
 
-		// PullMessages request: wait up to 5 seconds, accept up to 100 messages
 		pullReq := event.PullMessages{
-			Timeout:      "PT5S", // ISO 8601 duration: 5 seconds
+			Timeout:      "PT5S",
 			MessageLimit: 100,
 		}
 
@@ -216,7 +341,7 @@ func main() {
 			continue
 		}
 
-		pullBody, err := ioutil.ReadAll(pullResp.Body)
+		pullBody, err := io.ReadAll(pullResp.Body)
 		pullResp.Body.Close()
 
 		if pullResp.StatusCode != http.StatusOK {
@@ -237,7 +362,6 @@ func main() {
 			continue
 		}
 
-		// Print each received event
 		for _, msg := range msgs {
 			eventCount++
 			timestamp := msg.Message.Inner.UtcTime
@@ -274,8 +398,7 @@ cleanup:
 	// (typically 5-10). Leaked subscriptions can prevent new clients
 	// from receiving events until they auto-expire.
 	fmt.Println("Unsubscribing...")
-	unsubReq := event.Unsubscribe{}
-	unsubResp, err := dev.CallMethod(unsubReq)
+	unsubResp, err := dev.CallMethod(event.Unsubscribe{})
 	if err != nil {
 		log.Printf("Unsubscribe failed: %v (subscription will auto-expire)", err)
 	} else {
