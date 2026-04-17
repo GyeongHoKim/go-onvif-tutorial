@@ -5,10 +5,10 @@
 // behind camera management in commercial video management systems.
 //
 // Key patterns demonstrated:
-//   1. Concurrent camera connections using goroutines and sync.WaitGroup
-//   2. Graceful handling of offline/unreachable cameras
-//   3. Aggregating device info and stream URLs from multiple sources
-//   4. Tabular output using tabwriter (like a VMS dashboard)
+//  1. Concurrent camera connections using goroutines and sync.WaitGroup
+//  2. Graceful handling of offline/unreachable cameras
+//  3. Aggregating device info and stream URLs from multiple sources
+//  4. Tabular output using tabwriter (like a VMS dashboard)
 //
 // How this scales in production:
 //   - A VMS manages hundreds or thousands of cameras.
@@ -19,9 +19,10 @@
 //     the network or the VMS server.
 //
 // Configuration:
-//   Set CAMERA_1_HOST, CAMERA_2_HOST, CAMERA_3_HOST in .env.local
-//   to test with multiple cameras. Cameras that are offline will be
-//   reported as errors without blocking others.
+//
+//	Set CAMERA_1_HOST, CAMERA_2_HOST, CAMERA_3_HOST in .env.local
+//	to test with multiple cameras. Cameras that are offline will be
+//	reported as errors without blocking others.
 //
 // Run: go run ./09-real-world/camera-manager/
 package main

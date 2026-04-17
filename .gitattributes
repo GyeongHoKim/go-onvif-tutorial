@@ -1,0 +1,7 @@
+# Normalize all line endings to LF
+* text=auto eol=lf
+
+# Binary files
+*.exe binary
+*.dll binary
+*.so  binary

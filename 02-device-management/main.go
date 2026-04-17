@@ -11,7 +11,8 @@
 //   - Security (certificates, access policies)
 //
 // The Device Management Service endpoint is always at:
-//   http://<camera-ip>:<port>/onvif/device_service
+//
+//	http://<camera-ip>:<port>/onvif/device_service
 //
 // This example demonstrates the most commonly used operations.
 //
@@ -21,7 +22,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 
@@ -169,7 +170,7 @@ func main() {
 		log.Printf("  GetSystemLog failed: %v", err)
 	} else {
 		defer resp.Body.Close()
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode == http.StatusOK {
 			// Truncate long log output for readability
 			logStr := string(body)

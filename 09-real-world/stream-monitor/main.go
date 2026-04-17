@@ -29,7 +29,7 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -85,7 +85,7 @@ type msgPayload struct {
 type innerMessage struct {
 	UtcTime string      `xml:"UtcTime,attr"`
 	Source  simpleItems `xml:"Source"`
-	Data   simpleItems `xml:"Data"`
+	Data    simpleItems `xml:"Data"`
 }
 
 type simpleItems struct {
@@ -186,7 +186,7 @@ func monitorCamera(ctx <-chan struct{}, cam *config.CameraConfig, alerts chan<- 
 		return
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -238,7 +238,7 @@ func monitorCamera(ctx <-chan struct{}, cam *config.CameraConfig, alerts chan<- 
 			continue
 		}
 
-		pullBody, err := ioutil.ReadAll(pullResp.Body)
+		pullBody, _ := io.ReadAll(pullResp.Body)
 		pullResp.Body.Close()
 
 		if pullResp.StatusCode != http.StatusOK {

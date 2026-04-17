@@ -129,10 +129,10 @@ type topicNode struct {
 // schemaNodes are element names that describe message structure, not topics.
 // We skip them when printing the topic tree.
 var schemaNodes = map[string]bool{
-	"MessageDescription": true,
-	"Source":             true,
-	"Data":               true,
-	"SimpleItemDescription": true,
+	"MessageDescription":     true,
+	"Source":                 true,
+	"Data":                   true,
+	"SimpleItemDescription":  true,
 	"ElementItemDescription": true,
 }
 
@@ -341,7 +341,7 @@ func main() {
 			continue
 		}
 
-		pullBody, err := io.ReadAll(pullResp.Body)
+		pullBody, _ := io.ReadAll(pullResp.Body)
 		pullResp.Body.Close()
 
 		if pullResp.StatusCode != http.StatusOK {

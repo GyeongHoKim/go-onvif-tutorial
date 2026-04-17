@@ -4,21 +4,22 @@
 // on the local network without knowing their IP addresses in advance.
 //
 // How WS-Discovery works:
-//   1. The client sends a SOAP "Probe" message via UDP multicast to:
-//      Address : 239.255.255.250 (standard multicast group)
-//      Port    : 3702 (IANA-assigned for WS-Discovery)
-//   2. Every ONVIF device on the local subnet that receives the Probe
-//      responds with a unicast "ProbeMatch" message containing:
-//      - XAddrs: the device's ONVIF service URL(s)
-//      - Types:  what kind of device it is (e.g., NetworkVideoTransmitter)
-//      - Scopes: additional metadata (location, name, hardware info)
-//   3. The client collects responses for about 1 second (configurable)
-//      and builds a list of discovered devices.
+//  1. The client sends a SOAP "Probe" message via UDP multicast to:
+//     Address : 239.255.255.250 (standard multicast group)
+//     Port    : 3702 (IANA-assigned for WS-Discovery)
+//  2. Every ONVIF device on the local subnet that receives the Probe
+//     responds with a unicast "ProbeMatch" message containing:
+//     - XAddrs: the device's ONVIF service URL(s)
+//     - Types:  what kind of device it is (e.g., NetworkVideoTransmitter)
+//     - Scopes: additional metadata (location, name, hardware info)
+//  3. The client collects responses for about 1 second (configurable)
+//     and builds a list of discovered devices.
 //
 // Why multicast?
-//   Multicast allows a single probe to reach ALL devices on the subnet
-//   simultaneously, without needing to scan IP ranges. This is much
-//   faster and more efficient than port-scanning 192.168.1.1–254.
+//
+//	Multicast allows a single probe to reach ALL devices on the subnet
+//	simultaneously, without needing to scan IP ranges. This is much
+//	faster and more efficient than port-scanning 192.168.1.1–254.
 //
 // Network requirements:
 //   - The client and cameras must be on the same subnet (or multicast

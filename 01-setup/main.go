@@ -4,15 +4,15 @@
 // establishing a connection to an ONVIF-compliant IP camera or NVR.
 //
 // What happens when you call onvif.NewDevice():
-//   1. The library constructs the ONVIF Device Service URL from the Xaddr
-//      (e.g., http://192.168.1.100:80/onvif/device_service).
-//   2. It sends a GetCapabilities SOAP request to discover all available
-//      service endpoints (Media, PTZ, Events, Imaging, etc.).
-//   3. It stores the discovered endpoints internally so future CallMethod()
-//      calls are automatically routed to the correct service URL.
-//   4. If Username and Password are provided, all subsequent SOAP requests
-//      will include WS-UsernameToken authentication headers with a nonce,
-//      timestamp, and password digest (SHA-1).
+//  1. The library constructs the ONVIF Device Service URL from the Xaddr
+//     (e.g., http://192.168.1.100:80/onvif/device_service).
+//  2. It sends a GetCapabilities SOAP request to discover all available
+//     service endpoints (Media, PTZ, Events, Imaging, etc.).
+//  3. It stores the discovered endpoints internally so future CallMethod()
+//     calls are automatically routed to the correct service URL.
+//  4. If Username and Password are provided, all subsequent SOAP requests
+//     will include WS-UsernameToken authentication headers with a nonce,
+//     timestamp, and password digest (SHA-1).
 //
 // Prerequisites:
 //   - Copy .env.example to .env.local and fill in your camera's IP, port,

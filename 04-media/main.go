@@ -14,10 +14,10 @@
 //     camera. Useful for thumbnails, previews, and motion-triggered captures.
 //
 // Typical VMS workflow:
-//   1. GetProfiles() to list available media profiles
-//   2. For each profile, GetStreamUri() to get the RTSP URL
-//   3. Connect to the RTSP URL with a media player (VLC, ffmpeg, GStreamer)
-//   4. Optionally GetSnapshotUri() for thumbnail generation
+//  1. GetProfiles() to list available media profiles
+//  2. For each profile, GetStreamUri() to get the RTSP URL
+//  3. Connect to the RTSP URL with a media player (VLC, ffmpeg, GStreamer)
+//  4. Optionally GetSnapshotUri() for thumbnail generation
 //
 // Stream transport options:
 //   - UDP: Lower latency, may lose packets on congested networks

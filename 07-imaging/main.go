@@ -27,7 +27,7 @@ import (
 	"bufio"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -61,14 +61,14 @@ type getImagingSettingsResp struct {
 }
 
 type imagingSettings struct {
-	Brightness            float64                `xml:"Brightness"`
-	ColorSaturation       float64                `xml:"ColorSaturation"`
-	Contrast              float64                `xml:"Contrast"`
-	Sharpness             float64                `xml:"Sharpness"`
-	BacklightCompensation backlightCompensation  `xml:"BacklightCompensation"`
-	WideDynamicRange      wideDynamicRange       `xml:"WideDynamicRange"`
-	IrCutFilter           string                 `xml:"IrCutFilter"`
-	WhiteBalance          whiteBalance           `xml:"WhiteBalance"`
+	Brightness            float64               `xml:"Brightness"`
+	ColorSaturation       float64               `xml:"ColorSaturation"`
+	Contrast              float64               `xml:"Contrast"`
+	Sharpness             float64               `xml:"Sharpness"`
+	BacklightCompensation backlightCompensation `xml:"BacklightCompensation"`
+	WideDynamicRange      wideDynamicRange      `xml:"WideDynamicRange"`
+	IrCutFilter           string                `xml:"IrCutFilter"`
+	WhiteBalance          whiteBalance          `xml:"WhiteBalance"`
 }
 
 type backlightCompensation struct {
@@ -127,7 +127,7 @@ func main() {
 	// Retrieves the current image processing settings for a video source.
 	// These control how the camera processes the raw sensor data.
 	fmt.Println("--- 2. Current Imaging Settings ---")
-	settings := getImagingSettings(dev, onvif.ReferenceToken(videoSourceToken))
+	settings := getImagingSettings(dev, videoSourceToken)
 
 	fmt.Printf("  Brightness         : %.1f\n", settings.Brightness)
 	fmt.Printf("  Contrast           : %.1f\n", settings.Contrast)
@@ -164,16 +164,16 @@ func main() {
 		switch input {
 		case "+":
 			currentBrightness += 10
-			setBrightness(dev, onvif.ReferenceToken(videoSourceToken), currentBrightness)
+			setBrightness(dev, videoSourceToken, currentBrightness)
 			fmt.Printf("  Brightness set to %.1f\n", currentBrightness)
 
 		case "-":
 			currentBrightness -= 10
-			setBrightness(dev, onvif.ReferenceToken(videoSourceToken), currentBrightness)
+			setBrightness(dev, videoSourceToken, currentBrightness)
 			fmt.Printf("  Brightness set to %.1f\n", currentBrightness)
 
 		case "s":
-			updated := getImagingSettings(dev, onvif.ReferenceToken(videoSourceToken))
+			updated := getImagingSettings(dev, videoSourceToken)
 			fmt.Printf("  Brightness: %.1f | Contrast: %.1f | Sharpness: %.1f\n",
 				updated.Brightness, updated.Contrast, updated.Sharpness)
 
@@ -200,7 +200,7 @@ func getImagingSettings(dev *goonvif.Device, token onvif.ReferenceToken) imaging
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatalf("Failed to read response: %v", err)
 	}
@@ -240,7 +240,7 @@ func setBrightness(dev *goonvif.Device, token onvif.ReferenceToken, brightness f
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		log.Printf("SetImagingSettings returned HTTP %d:\n%s", resp.StatusCode, string(body))
 	}
 }

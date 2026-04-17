@@ -32,7 +32,7 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -69,10 +69,10 @@ type soapEnvelope struct {
 }
 
 type soapBody struct {
-	GetRecordingsResponse     getRecordingsResp     `xml:"GetRecordingsResponse"`
-	GetRecordingJobsResponse  getRecordingJobsResp  `xml:"GetRecordingJobsResponse"`
+	GetRecordingsResponse       getRecordingsResp       `xml:"GetRecordingsResponse"`
+	GetRecordingJobsResponse    getRecordingJobsResp    `xml:"GetRecordingJobsResponse"`
 	GetRecordingSummaryResponse getRecordingSummaryResp `xml:"GetRecordingSummaryResponse"`
-	Fault                     *soapFault            `xml:"Fault"`
+	Fault                       *soapFault              `xml:"Fault"`
 }
 
 type soapFault struct {
@@ -99,9 +99,9 @@ type recordingItem struct {
 }
 
 type recordingConfig struct {
-	Source      recordingSource `xml:"Source"`
-	Content     string          `xml:"Content"`
-	MaximumRetentionTime string `xml:"MaximumRetentionTime"`
+	Source               recordingSource `xml:"Source"`
+	Content              string          `xml:"Content"`
+	MaximumRetentionTime string          `xml:"MaximumRetentionTime"`
 }
 
 type recordingSource struct {
@@ -131,30 +131,30 @@ type getRecordingJobsResp struct {
 }
 
 type jobItem struct {
-	JobToken      string    `xml:"JobToken"`
+	JobToken         string    `xml:"JobToken"`
 	JobConfiguration jobConfig `xml:"JobConfiguration"`
 }
 
 type jobConfig struct {
-	RecordingToken string  `xml:"RecordingToken"`
-	Mode           string  `xml:"Mode"`
-	Priority       int     `xml:"Priority"`
+	RecordingToken string    `xml:"RecordingToken"`
+	Mode           string    `xml:"Mode"`
+	Priority       int       `xml:"Priority"`
 	Source         jobSource `xml:"Source"`
 }
 
 type jobSource struct {
-	SourceToken    sourceToken    `xml:"SourceToken"`
-	AutoCreateReceiver bool       `xml:"AutoCreateReceiver"`
+	SourceToken        sourceToken `xml:"SourceToken"`
+	AutoCreateReceiver bool        `xml:"AutoCreateReceiver"`
 }
 
 type sourceToken struct {
-	Token        string `xml:"Token"`
-	Type         string `xml:"Type"`
+	Token string `xml:"Token"`
+	Type  string `xml:"Type"`
 }
 
 type getRecordingSummaryResp struct {
-	DataFrom        string `xml:"DataFrom"`
-	DataUntil       string `xml:"DataUntil"`
+	DataFrom         string `xml:"DataFrom"`
+	DataUntil        string `xml:"DataUntil"`
 	NumberRecordings int    `xml:"NumberRecordings"`
 }
 
@@ -314,7 +314,7 @@ func callAndParse(dev *goonvif.Device, method interface{}) (*soapEnvelope, error
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read failed: %w", err)
 	}
